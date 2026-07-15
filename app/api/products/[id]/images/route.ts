@@ -1,13 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/utils/supabase/server";
-import { z } from "zod";
-
-const AddImageSchema = z.object({
-  url: z.url(),
-  isPrimary: z.boolean().default(false),
-  sortOrder: z.number().int().min(0).default(0),
-});
+import { AddImageSchema } from "@/lib/validators/product";
 
 export async function POST(
   request: NextRequest,

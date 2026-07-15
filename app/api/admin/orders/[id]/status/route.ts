@@ -52,7 +52,7 @@ export async function PUT(
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const result = await tx.order.update({
+      await tx.order.update({
         where: { id },
         data: { status: parsed.data.status },
       });
@@ -65,7 +65,20 @@ export async function PUT(
         },
       });
 
-      return result;
+      return tx.order.findUnique({
+        where: { id },
+        include: {
+          address: true,
+          items: {
+            include: {
+              product: {
+                include: { images: { where: { isPrimary: true }, take: 1 } },
+              },
+            },
+          },
+          statusHistory: { orderBy: { changedAt: "asc" } },
+        },
+      });
     });
 
     return Response.json(JSON.parse(JSON.stringify(updated)), { status: 200 });

@@ -38,6 +38,16 @@ export async function PUT(
     const review = await prisma.review.update({
       where: { id },
       data: parsed.data,
+      select: {
+        id: true,
+        rating: true,
+        healthRating: true,
+        reviewText: true,
+        plantPhotoUrl: true,
+        isApproved: true,
+        adminReply: true,
+        createdAt: true,
+      },
     });
 
     return Response.json(review, { status: 200 });

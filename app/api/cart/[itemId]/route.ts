@@ -40,11 +40,14 @@ export async function PUT(
       );
     }
 
-    // Check stock
+    // Check product is active and has sufficient stock
     const product = await prisma.product.findUnique({
       where: { id: existing.productId },
     });
-    if (product && product.stockQty < parsed.data.quantity) {
+    if (!product || !product.isActive) {
+      return Response.json({ error: "Product not available" }, { status: 400 });
+    }
+    if (product.stockQty < parsed.data.quantity) {
       return Response.json({ error: "Insufficient stock" }, { status: 400 });
     }
 

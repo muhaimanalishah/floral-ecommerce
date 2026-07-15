@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
             create: cartItems.map((item) => ({
               productId: item.productId,
               quantity: item.quantity,
-              unitPrice: item.product.price,
+              unitPrice: item.product.price.toNumber(),
               subtotal: item.product.price.toNumber() * item.quantity,
             })),
           },
@@ -132,7 +132,21 @@ export async function POST(request: NextRequest) {
       // Clear cart
       await tx.cartItem.deleteMany({ where: { userId: user.id } });
 
-      return created;
+      // Return full order with includes
+      return tx.order.findUnique({
+        where: { id: created.id },
+        include: {
+          address: true,
+          items: {
+            include: {
+              product: {
+                include: { images: { where: { isPrimary: true }, take: 1 } },
+              },
+            },
+          },
+          statusHistory: { orderBy: { changedAt: "asc" } },
+        },
+      });
     });
 
     return Response.json(JSON.parse(JSON.stringify(order)), { status: 201 });

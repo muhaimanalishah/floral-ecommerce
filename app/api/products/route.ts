@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/utils/supabase/server";
-import { Prisma } from "@/generated/client";
-import type { GrowthRate } from "@/generated/client";
+import type { Prisma, GrowthRate } from "@/generated/client";
 import { CreateProductSchema } from "@/lib/validators/product";
 
 export async function GET(request: NextRequest) {

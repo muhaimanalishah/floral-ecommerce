@@ -22,3 +22,10 @@ export type CreateProductInput = z.infer<typeof CreateProductSchema>;
 
 export const UpdateProductSchema = CreateProductSchema.partial();
 export type UpdateProductInput = z.infer<typeof UpdateProductSchema>;
+
+export const AddImageSchema = z.object({
+  url: z.string().url(),
+  isPrimary: z.boolean().default(false),
+  sortOrder: z.number().int().min(0).default(0),
+});
+export type AddImageInput = z.infer<typeof AddImageSchema>;
