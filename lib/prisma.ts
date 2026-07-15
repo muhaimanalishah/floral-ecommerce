@@ -6,7 +6,6 @@ const createPrismaClient = () => {
   return new PrismaClient({ adapter });
 };
 
-// Reuse a single instance in development to avoid exhausting connections
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
