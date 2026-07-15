@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 
 const signUpSchema = z.object({
   fullName: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.email("Invalid email address"),
+  email: z.string().email("Invalid email address"),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")
@@ -16,7 +16,7 @@ const signUpSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.email("Invalid email address"),
+  email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
