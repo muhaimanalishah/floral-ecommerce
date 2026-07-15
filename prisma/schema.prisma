@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum ProductType {
+  PLANT
+  ACCESSORY
+}
+
+enum ProductSize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum GrowthRate {
+  SLOW
+  FAST
+}
+
+enum OrderStatus {
+  ORDER_CONFIRMED
+  QUALITY_CHECK
+  IN_TRANSIT
+  DELIVERED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id               String         @id @default(uuid())
+  categoryId       String
+  category         Category       @relation(fields: [categoryId], references: [id])
+  name             String
+  slug             String         @unique
+  botanicalName    String?
+  productType      ProductType    @default(PLANT)
+  price            Decimal        @db.Decimal(10, 2)
+  size             ProductSize?
+  sunlightReq      String?
+  wateringFreq     String?
+  soilType         String?
+  temperatureRange String?
+  lowMaintenance   Boolean        @default(false)
+  petFriendly      Boolean        @default(false)
+  growthRate       GrowthRate?
+  stockQty         Int            @default(0)
+  description      String?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  images           ProductImage[]
+  cartItems        CartItem[]
+  reviews          Review[]
+  orderItems       OrderItem[]
+
+  @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("product_images")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  supabaseUserId String    @unique
+  fullName       String
+  email          String    @unique
+  phone          String?
+  role           UserRole  @default(CUSTOMER)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  addresses      Address[]
+  cartItems      CartItem[]
+  orders         Order[]
+  reviews        Review[]
+
+  @@map("users")
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String
+  street     String
+  city       String
+  province   String
+  postalCode String?
+  isDefault  Boolean  @default(false)
+  orders     Order[]
+  createdAt  DateTime @default(now())
+
+  @@map("addresses")
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  addedAt   DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id                  String               @id @default(uuid())
+  userId              String
+  user                User                 @relation(fields: [userId], references: [id])
+  addressId           String
+  address             Address              @relation(fields: [addressId], references: [id])
+  status              OrderStatus          @default(ORDER_CONFIRMED)
+  totalAmount         Decimal              @db.Decimal(10, 2)
+  deliveryDate        DateTime?
+  specialInstructions String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  items               OrderItem[]
+  statusHistory       OrderStatusHistory[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2)
+  subtotal  Decimal  @db.Decimal(10, 2)
+
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  changedAt DateTime    @default(now())
+
+  @@map("order_status_history")
+}
+
+model Review {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  rating        Int
+  healthRating  Int
+  reviewText    String?
+  plantPhotoUrl String?
+  isApproved    Boolean  @default(false)
+  adminReply    String?
+  createdAt     DateTime @default(now())
+
+  @@map("reviews")
+}
