@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { CategorySchema } from "@/lib/validators/category";
 
 export async function GET() {
@@ -18,20 +18,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getClaims();
-    if (!data?.claims) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireAdmin();
+    if ("error" in auth) {
+      return Response.json({ error: auth.error }, { status: auth.status });
     }
-    const user = await prisma.user.findUnique({
-      where: { supabaseUserId: data.claims.sub },
-    });
-    if (!user) {
-      return Response.json({ error: "User not found" }, { status: 404 });
-    }
-    if (user.role !== "ADMIN") {
-      return Response.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const user = auth.user;
 
     const body = await request.json();
     const parsed = CategorySchema.safeParse(body);

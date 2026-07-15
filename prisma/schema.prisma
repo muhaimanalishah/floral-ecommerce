@@ -92,10 +92,10 @@ model ProductImage {
 
 model User {
   id             String    @id @default(uuid())
-  supabaseUserId String    @unique
   fullName       String
   email          String    @unique
   phone          String?
+  hashedPassword String?
   role           UserRole  @default(CUSTOMER)
   isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())

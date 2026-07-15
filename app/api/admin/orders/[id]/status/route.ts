@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { Prisma } from "@/generated/client";
 import { UpdateOrderStatusSchema } from "@/lib/validators/admin";
 
@@ -11,19 +11,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getClaims();
-    if (!data?.claims) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const user = await prisma.user.findUnique({
-      where: { supabaseUserId: data.claims.sub },
-    });
-    if (!user) {
-      return Response.json({ error: "User not found" }, { status: 404 });
-    }
-    if (user.role !== "ADMIN") {
-      return Response.json({ error: "Forbidden" }, { status: 403 });
+    const auth = await requireAdmin();
+    if ("error" in auth) {
+      return Response.json({ error: auth.error }, { status: auth.status });
     }
 
     const { id } = await params;
@@ -44,9 +34,11 @@ export async function PUT(
 
     const currentIndex = STATUS_ORDER.indexOf(order.status);
     const newIndex = STATUS_ORDER.indexOf(parsed.data.status);
-    if (newIndex !== currentIndex + 1) {
+    const isAdvance = newIndex === currentIndex + 1;
+    const isRevert = newIndex === currentIndex - 1;
+    if (!isAdvance && !isRevert) {
       return Response.json(
-        { error: "Invalid status transition" },
+        { error: "Invalid status transition — can only move one step forward or back" },
         { status: 400 },
       );
     }
@@ -68,6 +60,7 @@ export async function PUT(
       return tx.order.findUnique({
         where: { id },
         include: {
+          user: { select: { fullName: true, email: true, phone: true } },
           address: true,
           items: {
             include: {

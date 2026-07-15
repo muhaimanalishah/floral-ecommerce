@@ -12,6 +12,7 @@ export const CreateProductSchema = z.object({
   wateringFreq: z.string().optional(),
   soilType: z.string().optional(),
   temperatureRange: z.string().optional(),
+  isActive: z.boolean().default(true),
   lowMaintenance: z.boolean().default(false),
   petFriendly: z.boolean().default(false),
   growthRate: z.enum(["SLOW", "FAST"]).optional(),
