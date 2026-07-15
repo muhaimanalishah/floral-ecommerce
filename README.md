@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FloraFetch
+
+A full-stack e-commerce platform for buying and selling plants and plant accessories. Customers pay on delivery after inspecting plant health at their doorstep.
+
+Built with Next.js 16, React 19, Tailwind CSS v4, shadcn/ui, and Prisma with PostgreSQL.
+
+## Features
+
+### Storefront
+- Product catalog with botanical metadata (sunlight, watering, soil, growth rate, pet-friendliness)
+- Category-based browsing
+- Shopping cart (one product per row, quantity managed server-side)
+- Checkout with address selection
+- Order tracking with status timeline (Confirmed > Quality Check > In Transit > Delivered)
+- Product reviews with ratings, health ratings, and admin replies
+- Cash on delivery only
+
+### Admin Panel
+- Dashboard with revenue and order stats
+- Product CRUD with drag-and-drop image sorting
+- Category management
+- Order management with status updates
+- User management (activate/suspend)
+- Review moderation (approve/reject, reply)
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router) |
+| UI | React 19, Tailwind CSS v4, shadcn/ui |
+| Database | PostgreSQL via Prisma ORM v7 |
+| Auth | NextAuth.js v5 (credentials, JWT sessions) |
+| Forms | react-hook-form + zod |
+| Charts | recharts |
+| Tables | @tanstack/react-table |
+| Drag & drop | @dnd-kit |
+| Icons | lucide-react |
+| Toasts | sonner |
+| Theme | next-themes |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL
+
+### Setup
+
+1. Clone the repo and install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy the example environment file and fill in your values:
+
+```bash
+cp .example.env .env
+```
+
+Required environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `AUTH_SECRET` | Secret for JWT encryption (generate with `openssl rand -hex 32`) |
+
+3. Set up the database:
+
+```bash
+npx prisma migrate dev
+```
+
+4. (Optional) Seed the database with sample data:
+
+```bash
+npx prisma db seed
+```
+
+5. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Seed Credentials
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@florafetch.com | admin123 |
+| Customer | alice@example.com | password123 |
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+├── (storefront)/   # Public pages (shop, cart, checkout, etc.)
+├── admin/          # Admin panel routes
+└── auth/           # Login and signup
+components/
+├── admin/          # Admin-specific components
+├── store/          # Storefront components
+└── ui/             # shadcn/ui primitives
+lib/
+├── validators/     # Zod schemas
+├── prisma.ts       # Prisma client (driver adapter)
+└── auth-helpers.ts # Auth utilities
+prisma/
+└── schema.prisma   # Database schema
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment Variables
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `.example.env` for all required variables.
