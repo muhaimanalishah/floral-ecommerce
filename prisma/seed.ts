@@ -217,7 +217,6 @@ async function main() {
       temperatureRange: "N/A",
       lowMaintenance: true,
       petFriendly: true,
-      growthRate: "SLOW" as const,
       stockQty: 50,
       description: "A premium hand-crafted terracotta clay pot, perfect for succulents and medium-sized plants. Provides excellent soil aeration.",
       isActive: true,
@@ -344,7 +343,7 @@ async function main() {
 
   console.log("Seeding orders and order status histories...");
   // Order 1: John, status: DELIVERED, items: Boston Fern (qty 1), Clay Pot (qty 1)
-  const o1 = await prisma.order.create({
+  await prisma.order.create({
     data: {
       userId: users["john@example.com"].id,
       addressId: johnAddress.id,
@@ -381,7 +380,7 @@ async function main() {
   });
 
   // Order 2: Jane, status: IN_TRANSIT, items: Snake Plant (qty 2)
-  const o2 = await prisma.order.create({
+  await prisma.order.create({
     data: {
       userId: users["jane@example.com"].id,
       addressId: janeAddress.id,
@@ -410,7 +409,7 @@ async function main() {
   });
 
   // Order 3: Bob, status: QUALITY_CHECK, items: Monstera Deliciosa (qty 1), Aloe Vera (qty 1)
-  const o3 = await prisma.order.create({
+  await prisma.order.create({
     data: {
       userId: users["bob@example.com"].id,
       addressId: bobAddress.id,
@@ -444,7 +443,7 @@ async function main() {
   });
 
   // Order 4: John, status: ORDER_CONFIRMED, items: Lavender (qty 1)
-  const o4 = await prisma.order.create({
+  await prisma.order.create({
     data: {
       userId: users["john@example.com"].id,
       addressId: johnAddress.id,
@@ -511,14 +510,27 @@ async function main() {
     }
   });
 
-  // Review 4: John for Monstera Deliciosa (Pending approval)
+  // Review 4: John for Lavender (Approved — from his order 4)
   await prisma.review.create({
     data: {
       userId: users["john@example.com"].id,
-      productId: products["Monstera Deliciosa"].id,
+      productId: products["Lavender"].id,
       rating: 5,
       healthRating: 5,
-      reviewText: "Beautiful Monstera, leaves are huge! Exceeded my expectations.",
+      reviewText: "Smells incredible! The plant arrived bushy and full of blooms. Already brightening up my balcony.",
+      isApproved: true,
+      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+    }
+  });
+
+  // Review 5: Bob for Monstera Deliciosa (Pending approval — from his order)
+  await prisma.review.create({
+    data: {
+      userId: users["bob@example.com"].id,
+      productId: products["Monstera Deliciosa"].id,
+      rating: 5,
+      healthRating: 4,
+      reviewText: "Beautiful Monstera, leaves are huge! The specimen arrived in great shape. Exceeded my expectations.",
       isApproved: false,
       createdAt: new Date()
     }
