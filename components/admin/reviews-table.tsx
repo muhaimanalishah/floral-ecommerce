@@ -1,6 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -20,14 +27,14 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { StarIcon, EyeIcon, Loader2Icon, ChevronLeftIcon, ChevronRightIcon, MessageSquareTextIcon, CheckIcon, ShieldAlertIcon } from "lucide-react"
+import { StarIcon, EyeIcon, Loader2Icon, ChevronLeftIcon, ChevronRightIcon, MessageSquareTextIcon, CheckIcon } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
@@ -50,16 +57,34 @@ interface Review {
   }
 }
 
+function renderStars(count: number, activeColor = "text-amber-500", inactiveColor = "text-muted-foreground/20") {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <StarIcon
+          key={star}
+          className={cn(
+            "size-3.5 fill-current",
+            star <= count ? activeColor : inactiveColor
+          )}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function ReviewsTable() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>("pending")
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [selectedReview, setSelectedReview] = useState<Review | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [adminReply, setAdminReply] = useState("")
   const [saving, setSaving] = useState(false)
+  const [sorting, setSorting] = useState<SortingState>([])
 
   const fetchReviews = async (currentPage = page, status = statusFilter) => {
     setLoading(true)
@@ -67,7 +92,9 @@ export function ReviewsTable() {
       const res = await fetch(`/api/admin/reviews?page=${currentPage}&limit=10&status=${status}`)
       const json = await res.json()
       setReviews(json.data ?? [])
-      setTotalPages(Math.ceil((json.pagination?.total ?? 0) / (json.pagination?.limit ?? 10)))
+      const t = json.pagination?.total ?? 0
+      setTotal(t)
+      setTotalPages(Math.ceil(t / (json.pagination?.limit ?? 10)))
     } catch {
       toast.error("Failed to load reviews")
     } finally {
@@ -126,7 +153,6 @@ export function ReviewsTable() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           adminReply: adminReply.trim() || undefined,
-          // Auto approve if they are replying
           isApproved: true,
         }),
       })
@@ -146,41 +172,111 @@ export function ReviewsTable() {
     }
   }
 
-  const renderStars = (count: number, activeColor = "text-amber-500", inactiveColor = "text-muted-foreground/20") => {
-    return (
-      <div className="flex gap-0.5">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <StarIcon
-            key={star}
-            className={cn(
-              "size-3.5 fill-current",
-              star <= count ? activeColor : inactiveColor
-            )}
-          />
-        ))}
-      </div>
-    )
-  }
+  const columns: ColumnDef<Review>[] = [
+    {
+      id: "customer",
+      header: "Customer",
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium text-foreground">{row.original.user.fullName}</div>
+          <div className="text-xs text-muted-foreground">{row.original.user.email}</div>
+        </div>
+      ),
+    },
+    {
+      id: "product",
+      header: "Product",
+      cell: ({ row }) => <span className="font-medium text-foreground">{row.original.product.name}</span>,
+    },
+    {
+      id: "rating",
+      header: "Product Rating",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          {renderStars(row.original.rating, "text-amber-500")}
+          <span className="text-xs text-muted-foreground font-semibold">({row.original.rating})</span>
+        </div>
+      ),
+    },
+    {
+      id: "health",
+      header: "Plant Health",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          {renderStars(row.original.healthRating, "text-emerald-500")}
+          <span className="text-xs text-muted-foreground font-semibold">({row.original.healthRating})</span>
+        </div>
+      ),
+    },
+    {
+      id: "comment",
+      header: "Comment Preview",
+      cell: ({ row }) => (
+        <p className="max-w-[200px] truncate text-sm text-muted-foreground" title={row.original.reviewText ?? ""}>
+          {row.original.reviewText || <span className="italic text-muted-foreground/45">Rating only</span>}
+        </p>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge
+          variant="outline"
+          className={cn(
+            row.original.isApproved
+              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+              : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+          )}
+        >
+          {row.original.isApproved ? "Approved" : "Pending"}
+        </Badge>
+      ),
+    },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => handleOpenModerate(row.original)}
+          className="cursor-pointer"
+          title="Moderate review"
+        >
+          <EyeIcon className="size-4" />
+        </Button>
+      ),
+    },
+  ]
+
+  const table = useReactTable({
+    data: reviews,
+    columns,
+    state: { sorting, pagination: { pageIndex: page - 1, pageSize: 10 } },
+    onSortingChange: setSorting,
+    manualPagination: true,
+    pageCount: totalPages,
+    getCoreRowModel: getCoreRowModel(),
+  })
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
-        <div className="text-sm text-muted-foreground">
-          Moderate customer review entries
-        </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="review-filter" className="text-xs text-muted-foreground whitespace-nowrap">Filter Reviews:</Label>
-          <Select value={statusFilter} onValueChange={handleFilterChange}>
-            <SelectTrigger id="review-filter" className="w-[180px]">
-              <SelectValue placeholder="Pending" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pending Approval</SelectItem>
-              <SelectItem value="approved">Approved / Published</SelectItem>
+      <div className="mb-4 flex items-center gap-3">
+        <Select value={statusFilter} onValueChange={handleFilterChange}>
+          <SelectTrigger className="w-44 h-8 text-sm">
+            <SelectValue>
+              {statusFilter === "pending" ? "Pending" : statusFilter === "approved" ? "Approved" : "All Reviews"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="all">All Reviews</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="rounded-lg border bg-card">
@@ -192,74 +288,30 @@ export function ReviewsTable() {
         ) : (
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Product Rating</TableHead>
-                <TableHead>Plant Health</TableHead>
-                <TableHead>Comment Preview</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id}>
+                  {hg.headers.map((h) => (
+                    <TableHead key={h.id}>
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
             </TableHeader>
             <TableBody>
-              {reviews.length ? (
-                reviews.map((r) => (
-                  <TableRow key={r.id} className="hover:bg-muted/50 transition-colors">
-                    <TableCell>
-                      <div>
-                        <div className="font-medium text-foreground">{r.user.fullName}</div>
-                        <div className="text-xs text-muted-foreground">{r.user.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground">
-                      {r.product.name}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {renderStars(r.rating, "text-amber-500")}
-                        <span className="text-xs text-muted-foreground font-semibold">({r.rating})</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {renderStars(r.healthRating, "text-emerald-500")}
-                        <span className="text-xs text-muted-foreground font-semibold">({r.healthRating})</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <p className="max-w-[200px] truncate text-sm text-muted-foreground" title={r.reviewText ?? ""}>
-                        {r.reviewText || <span className="italic text-muted-foreground/45">Rating only</span>}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={r.isApproved ? "default" : "outline"}
-                        className={cn(
-                          r.isApproved
-                            ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/25 border-emerald-500/20"
-                            : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/25 border-amber-500/20"
-                        )}
-                      >
-                        {r.isApproved ? "Approved" : "Awaiting Approval"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenModerate(r)}
-                        className="cursor-pointer hover:bg-accent"
-                      >
-                        <EyeIcon className="size-4 mr-1" />
-                        Moderate
-                      </Button>
-                    </TableCell>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} className="hover:bg-muted/50 transition-colors">
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
                     No reviews found
                   </TableCell>
                 </TableRow>
@@ -271,7 +323,7 @@ export function ReviewsTable() {
 
       <div className="mt-4 flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Page {page} of {totalPages || 1}
+          {total} review{total !== 1 ? "s" : ""} &middot; Page {page} of {totalPages || 1}
         </div>
         <div className="flex gap-2">
           <Button
@@ -303,8 +355,7 @@ export function ReviewsTable() {
               </SheetDescription>
             </SheetHeader>
 
-            <div className="mt-6 space-y-6">
-              {/* Review details */}
+            <div className="mt-6 space-y-6 px-4 pb-4">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -338,7 +389,7 @@ export function ReviewsTable() {
                 <div>
                   <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Customer Review</h4>
                   <p className="text-sm text-foreground bg-muted/40 rounded-md p-3 border italic">
-                    "{selectedReview.reviewText || "Rating left with no comments."}"
+                    &ldquo;{selectedReview.reviewText || "Rating left with no comments."}&rdquo;
                   </p>
                 </div>
 
@@ -356,7 +407,6 @@ export function ReviewsTable() {
                 )}
               </div>
 
-              {/* Action buttons */}
               <div className="border-t pt-4 space-y-4">
                 {!selectedReview.isApproved && (
                   <Button
@@ -378,7 +428,6 @@ export function ReviewsTable() {
                   </Button>
                 )}
 
-                {/* Reply section */}
                 <div className="space-y-2 border-t pt-4">
                   <div className="flex items-center gap-1.5 text-primary text-xs font-semibold uppercase tracking-wider">
                     <MessageSquareTextIcon className="size-4" />

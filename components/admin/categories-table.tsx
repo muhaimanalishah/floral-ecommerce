@@ -262,7 +262,7 @@ export function CategoriesTable() {
               </SheetDescription>
             </SheetHeader>
 
-            <div className="mt-6 grid gap-6">
+            <div className="mt-6 grid gap-6 px-4 pb-4">
               {formErrors._form && (
                 <p className="text-sm text-destructive font-medium">{formErrors._form}</p>
               )}

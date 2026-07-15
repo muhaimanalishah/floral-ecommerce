@@ -5,9 +5,7 @@ export default function AdminProducts() {
   return (
     <>
       <AdminHeader title="Products" />
-      <div className="px-4 lg:px-6">
-        <ProductsTable />
-      </div>
+      <ProductsTable />
     </>
   )
 }

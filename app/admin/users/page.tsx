@@ -5,9 +5,7 @@ export default function AdminUsers() {
   return (
     <>
       <AdminHeader title="User Registry" />
-      <div className="px-4 lg:px-6">
-        <UsersTable />
-      </div>
+      <UsersTable />
     </>
   )
 }

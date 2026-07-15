@@ -20,6 +20,13 @@ import {
 } from "@/components/ui/table"
 import { TrendingUpIcon, TrendingDownIcon, AlertCircleIcon } from "lucide-react"
 
+const STATUS_LABELS: Record<string, string> = {
+  ORDER_CONFIRMED: "Confirmed",
+  QUALITY_CHECK: "Quality Check",
+  IN_TRANSIT: "In Transit",
+  DELIVERED: "Delivered",
+}
+
 interface DashboardData {
   totalOrders: number
   totalRevenue: number
@@ -47,16 +54,16 @@ export function DashboardCards() {
   }, [])
 
   if (error) {
-    return <div className="px-4 lg:px-6 text-destructive">Error: {error}</div>
+    return <div className="text-destructive">Error: {error}</div>
   }
 
   if (!data) {
-    return <div className="px-4 lg:px-6 text-muted-foreground">Loading...</div>
+    return <div className="text-muted-foreground">Loading...</div>
   }
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
         <Card className="@container/card">
           <CardHeader>
             <CardDescription>Total Orders</CardDescription>
@@ -138,7 +145,7 @@ export function DashboardCards() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @4xl/main:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 @4xl/main:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Orders by Status</CardTitle>
@@ -154,7 +161,7 @@ export function DashboardCards() {
               <TableBody>
                 {Object.entries(data.ordersByStatus).map(([status, count]) => (
                   <TableRow key={status}>
-                    <TableCell className="font-medium">{status.replace(/_/g, " ")}</TableCell>
+                    <TableCell className="font-medium">{STATUS_LABELS[status] ?? status.replace(/_/g, " ")}</TableCell>
                     <TableCell className="text-right">{count}</TableCell>
                   </TableRow>
                 ))}

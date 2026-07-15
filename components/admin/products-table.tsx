@@ -1,16 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import {
   flexRender,
   getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
   type ColumnDef,
-  type SortingState,
 } from "@tanstack/react-table"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -20,16 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
   Select,
   SelectContent,
   SelectGroup,
@@ -37,13 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, PencilIcon } from "lucide-react"
-import { CreateProductSchema, type CreateProductInput } from "@/lib/validators/product"
+import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, PencilIcon, Loader2Icon, SearchIcon, XIcon } from "lucide-react"
+import { toast } from "sonner"
+import Link from "next/link"
 import type { GrowthRate, ProductSize, ProductType } from "@/generated/client"
 
 interface Product {
@@ -54,10 +40,6 @@ interface Product {
   productType: ProductType
   price: number
   size: ProductSize | null
-  sunlightReq: string | null
-  wateringFreq: string | null
-  soilType: string | null
-  temperatureRange: string | null
   stockQty: number
   isActive: boolean
   lowMaintenance: boolean
@@ -73,41 +55,98 @@ interface Category {
   name: string
 }
 
-function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-}
-
 export function ProductsTable() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [form, setForm] = useState<CreateProductInput>({
-    name: "",
-    slug: "",
-    categoryId: "",
-    productType: "PLANT",
-    price: 0,
-    stockQty: 0,
-    lowMaintenance: false,
-    petFriendly: false,
-  })
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
-  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+
+  const [q, setQ] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/products").then((r) => r.json()),
-      fetch("/api/categories").then((r) => r.json()),
-    ]).then(([productsRes, categoriesRes]) => {
-      setProducts(productsRes.data ?? [])
-      setCategories(categoriesRes.data ?? [])
-    })
+    fetch("/api/categories")
+      .then((r) => r.json())
+      .then((json) => setCategories(json.data ?? []))
+      .catch(() => {})
   }, [])
+
+  const fetchProducts = useCallback(async (
+    search: string,
+    category: string,
+    status: string,
+    currentPage: number,
+  ) => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({ page: String(currentPage), limit: "10" })
+      if (search) params.set("q", search)
+      if (category !== "all") params.set("category", category)
+      if (status !== "all") params.set("status", status)
+
+      const res = await fetch(`/api/admin/products?${params}`)
+      const json = await res.json()
+      setProducts(json.data ?? [])
+      const t = json.pagination?.total ?? 0
+      setTotal(t)
+      setTotalPages(Math.ceil(t / (json.pagination?.limit ?? 10)))
+    } catch {
+      toast.error("Failed to load products")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Debounce search, instant for filter dropdowns
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      fetchProducts(q, categoryFilter, statusFilter, page)
+    }, q ? 300 : 0)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [q, categoryFilter, statusFilter, page, fetchProducts])
+
+  const handleFilterChange = (setter: (v: string) => void) => (val: string | null) => {
+    if (val) { setter(val); setPage(1) }
+  }
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQ(e.target.value)
+    setPage(1)
+  }
+
+  const handleClearSearch = () => {
+    setQ("")
+    setPage(1)
+  }
+
+  const handleToggleActive = async (product: Product) => {
+    setTogglingId(product.id)
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !product.isActive }),
+      })
+      if (res.ok) {
+        toast.success(`"${product.name}" is now ${!product.isActive ? "active" : "inactive"}.`)
+        fetchProducts(q, categoryFilter, statusFilter, page)
+      } else {
+        const json = await res.json()
+        toast.error(json.error ?? "Failed to update product status")
+      }
+    } catch {
+      toast.error("An error occurred while updating product status")
+    } finally {
+      setTogglingId(null)
+    }
+  }
 
   const columns: ColumnDef<Product>[] = [
     {
@@ -136,22 +175,43 @@ export function ProductsTable() {
     {
       accessorKey: "isActive",
       header: "Status",
-      cell: ({ row }) => (
-        <Badge variant={row.original.isActive ? "default" : "secondary"}>
-          {row.original.isActive ? "Active" : "Inactive"}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const p = row.original
+        return (
+          <button
+            onClick={() => handleToggleActive(p)}
+            disabled={togglingId === p.id}
+            className="cursor-pointer disabled:cursor-default"
+            title={p.isActive ? "Click to deactivate" : "Click to activate"}
+          >
+            {togglingId === p.id ? (
+              <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+            ) : (
+              <Badge
+                variant={p.isActive ? "default" : "secondary"}
+                className={cn(
+                  p.isActive
+                    ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                )}
+              >
+                {p.isActive ? "Active" : "Inactive"}
+              </Badge>
+            )}
+          </button>
+        )
+      },
     },
     {
       id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => openEdit(row.original)}
+        <Link
+          href={`/admin/products/${row.original.id}/edit`}
+          className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
         >
           <PencilIcon className="size-4" />
-        </Button>
+        </Link>
       ),
     },
   ]
@@ -159,401 +219,156 @@ export function ProductsTable() {
   const table = useReactTable({
     data: products,
     columns,
-    state: { sorting },
-    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    initialState: { pagination: { pageSize: 10 } },
+    manualPagination: true,
+    pageCount: totalPages,
   })
 
-  function resetForm() {
-    setForm({
-      name: "",
-      slug: "",
-      categoryId: "",
-      productType: "PLANT",
-      price: 0,
-      stockQty: 0,
-      lowMaintenance: false,
-      petFriendly: false,
-    })
-    setFormErrors({})
-    setEditingProduct(null)
-  }
-
-  function openEdit(product: Product) {
-    setEditingProduct(product)
-    setForm({
-      categoryId: product.category.id,
-      name: product.name,
-      slug: product.slug,
-      botanicalName: product.botanicalName ?? undefined,
-      productType: product.productType,
-      price: product.price,
-      size: product.size ?? undefined,
-      sunlightReq: product.sunlightReq ?? undefined,
-      wateringFreq: product.wateringFreq ?? undefined,
-      soilType: product.soilType ?? undefined,
-      temperatureRange: product.temperatureRange ?? undefined,
-      lowMaintenance: product.lowMaintenance,
-      petFriendly: product.petFriendly,
-      growthRate: product.growthRate ?? undefined,
-      stockQty: product.stockQty,
-      description: product.description ?? undefined,
-    } as CreateProductInput)
-    setFormErrors({})
-    setSheetOpen(true)
-  }
-
-  function updateField(key: string, value: unknown) {
-    setForm((prev) => {
-      const next = { ...prev, [key]: value }
-      if (key === "name" && !editingProduct) {
-        next.slug = slugify(value as string)
-      }
-      return next
-    })
-  }
-
-  async function handleSave() {
-    const parsed = CreateProductSchema.safeParse(form)
-    if (!parsed.success) {
-      const errors: Record<string, string> = {}
-      for (const issue of parsed.error.issues) {
-        const key = String(issue.path[0])
-        if (!errors[key]) errors[key] = issue.message
-      }
-      setFormErrors(errors)
-      return
-    }
-
-    setSaving(true)
-    try {
-      const url = editingProduct
-        ? `/api/products/${editingProduct.id}`
-        : "/api/products"
-      const method = editingProduct ? "PUT" : "POST"
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
-      })
-
-      if (!res.ok) {
-        const err = await res.json()
-        setFormErrors({ _form: err.error ?? "Failed to save" })
-        return
-      }
-
-      // Refresh product list
-      const productsRes = await fetch("/api/products").then((r) => r.json())
-      setProducts(productsRes.data ?? [])
-      setSheetOpen(false)
-      resetForm()
-    } finally {
-      setSaving(false)
-    }
-  }
+  const hasActiveFilters = q || categoryFilter !== "all" || statusFilter !== "all"
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {products.length} products
+      {/* Toolbar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 items-center gap-2 flex-wrap">
+          {/* Search */}
+          <div className="relative w-64">
+            <SearchIcon className="absolute left-2.5 top-2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or botanical..."
+              value={q}
+              onChange={handleSearchChange}
+              className="pl-8 pr-8 h-8 text-sm"
+            />
+            {q && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"
+              >
+                <XIcon className="size-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Category filter */}
+          <Select value={categoryFilter} onValueChange={handleFilterChange(setCategoryFilter)}>
+            <SelectTrigger className="w-40 h-8 text-sm">
+              <SelectValue>
+                {categoryFilter === "all"
+                  ? "All Categories"
+                  : categories.find((c) => c.id === categoryFilter)?.name ?? "Category"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          {/* Status filter */}
+          <Select value={statusFilter} onValueChange={handleFilterChange(setStatusFilter)}>
+            <SelectTrigger className="w-36 h-8 text-sm">
+              <SelectValue>
+                {statusFilter === "all" ? "All Status" : statusFilter === "active" ? "Active" : "Inactive"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-muted-foreground"
+              onClick={() => { setQ(""); setCategoryFilter("all"); setStatusFilter("all"); setPage(1) }}
+            >
+              <XIcon className="size-3.5 mr-1" />
+              Clear
+            </Button>
+          )}
         </div>
-        <Sheet open={sheetOpen} onOpenChange={(open) => { setSheetOpen(open); if (!open) resetForm() }}>
-          <SheetTrigger onClick={() => { resetForm(); setSheetOpen(true) }}
-            className={cn(buttonVariants(), "cursor-pointer")}
-          >
-            <PlusIcon className="size-4 mr-2" />
-            Add Product
-          </SheetTrigger>
-          <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-            <SheetHeader>
-              <SheetTitle>{editingProduct ? "Edit Product" : "Add Product"}</SheetTitle>
-              <SheetDescription>
-                {editingProduct ? "Update the product details" : "Fill in the details to create a new product"}
-              </SheetDescription>
-            </SheetHeader>
 
-            <div className="px-4 pb-4 grid gap-6">
-              {formErrors._form && (
-                <p className="text-sm text-destructive">{formErrors._form}</p>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={form.name}
-                    onChange={(e) => updateField("name", e.target.value)}
-                  />
-                  {formErrors.name && <p className="text-xs text-destructive">{formErrors.name}</p>}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="slug">Slug</Label>
-                  <Input
-                    id="slug"
-                    value={form.slug}
-                    onChange={(e) => updateField("slug", e.target.value)}
-                  />
-                  {formErrors.slug && <p className="text-xs text-destructive">{formErrors.slug}</p>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select
-                    value={form.categoryId}
-                    onValueChange={(v) => updateField("categoryId", v)}
-                  >
-                    <SelectTrigger id="category">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  {formErrors.categoryId && <p className="text-xs text-destructive">{formErrors.categoryId}</p>}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="productType">Type</Label>
-                  <Select
-                    value={form.productType}
-                    onValueChange={(v) => updateField("productType", v)}
-                  >
-                    <SelectTrigger id="productType">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="PLANT">Plant</SelectItem>
-                        <SelectItem value="ACCESSORY">Accessory</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="price">Price (PKR)</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) => updateField("price", parseFloat(e.target.value) || 0)}
-                  />
-                  {formErrors.price && <p className="text-xs text-destructive">{formErrors.price}</p>}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="size">Size</Label>
-                  <Select
-                    value={form.size ?? ""}
-                    onValueChange={(v) => updateField("size", v || undefined)}
-                  >
-                    <SelectTrigger id="size">
-                      <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="SMALL">Small</SelectItem>
-                        <SelectItem value="MEDIUM">Medium</SelectItem>
-                        <SelectItem value="LARGE">Large</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="stockQty">Stock</Label>
-                  <Input
-                    id="stockQty"
-                    type="number"
-                    min="0"
-                    value={form.stockQty}
-                    onChange={(e) => updateField("stockQty", parseInt(e.target.value) || 0)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="growthRate">Growth Rate</Label>
-                  <Select
-                    value={form.growthRate ?? ""}
-                    onValueChange={(v) => updateField("growthRate", v || undefined)}
-                  >
-                    <SelectTrigger id="growthRate">
-                      <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="SLOW">Slow</SelectItem>
-                        <SelectItem value="FAST">Fast</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="botanicalName">Botanical Name</Label>
-                  <Input
-                    id="botanicalName"
-                    value={form.botanicalName ?? ""}
-                    onChange={(e) => updateField("botanicalName", e.target.value || undefined)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="sunlightReq">Sunlight</Label>
-                  <Input
-                    id="sunlightReq"
-                    value={form.sunlightReq ?? ""}
-                    onChange={(e) => updateField("sunlightReq", e.target.value || undefined)}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="wateringFreq">Watering</Label>
-                  <Input
-                    id="wateringFreq"
-                    value={form.wateringFreq ?? ""}
-                    onChange={(e) => updateField("wateringFreq", e.target.value || undefined)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="soilType">Soil Type</Label>
-                  <Input
-                    id="soilType"
-                    value={form.soilType ?? ""}
-                    onChange={(e) => updateField("soilType", e.target.value || undefined)}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="temperatureRange">Temperature</Label>
-                  <Input
-                    id="temperatureRange"
-                    value={form.temperatureRange ?? ""}
-                    onChange={(e) => updateField("temperatureRange", e.target.value || undefined)}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="lowMaintenance"
-                    checked={form.lowMaintenance}
-                    onCheckedChange={(v) => updateField("lowMaintenance", !!v)}
-                  />
-                  <Label htmlFor="lowMaintenance">Low Maintenance</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="petFriendly"
-                    checked={form.petFriendly}
-                    onCheckedChange={(v) => updateField("petFriendly", !!v)}
-                  />
-                  <Label htmlFor="petFriendly">Pet Friendly</Label>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  rows={3}
-                  value={form.description ?? ""}
-                  onChange={(e) => updateField("description", e.target.value || undefined)}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setSheetOpen(false); resetForm() }}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving ? "Saving..." : editingProduct ? "Update Product" : "Create Product"}
-                </Button>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
+        <Link href="/admin/products/new" className={cn(buttonVariants(), "cursor-pointer shrink-0")}>
+          <PlusIcon className="size-4 mr-2" />
+          Add Product
+        </Link>
       </div>
 
-      <div className="rounded-lg border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead key={h.id} onClick={h.column.getToggleSortingHandler()}>
-                    {flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+      {/* Table */}
+      <div className="rounded-lg border bg-card">
+        {loading ? (
+          <div className="flex h-40 items-center justify-center text-muted-foreground">
+            <Loader2Icon className="mr-2 size-6 animate-spin text-primary" />
+            Loading products...
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id}>
+                  {hg.headers.map((h) => (
+                    <TableHead key={h.id}>
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  No products yet
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} className="hover:bg-muted/50 transition-colors">
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                    {hasActiveFilters ? "No products match your filters." : "No products yet."}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
       </div>
 
+      {/* Pagination */}
       <div className="mt-4 flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+          {total} product{total !== 1 ? "s" : ""} &middot; Page {page} of {totalPages || 1}
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
           >
-            <ChevronLeftIcon /> Previous
+            <ChevronLeftIcon className="size-4 mr-1" /> Previous
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
           >
-            Next <ChevronRightIcon />
+            Next <ChevronRightIcon className="size-4 ml-1" />
           </Button>
         </div>
       </div>

@@ -15,7 +15,6 @@ export async function PUT(
     if ("error" in auth) {
       return Response.json({ error: auth.error }, { status: auth.status });
     }
-    const user = auth.user;
 
     const { id } = await params;
 
@@ -35,9 +34,11 @@ export async function PUT(
 
     const currentIndex = STATUS_ORDER.indexOf(order.status);
     const newIndex = STATUS_ORDER.indexOf(parsed.data.status);
-    if (newIndex !== currentIndex + 1) {
+    const isAdvance = newIndex === currentIndex + 1;
+    const isRevert = newIndex === currentIndex - 1;
+    if (!isAdvance && !isRevert) {
       return Response.json(
-        { error: "Invalid status transition" },
+        { error: "Invalid status transition — can only move one step forward or back" },
         { status: 400 },
       );
     }
@@ -59,6 +60,7 @@ export async function PUT(
       return tx.order.findUnique({
         where: { id },
         include: {
+          user: { select: { fullName: true, email: true, phone: true } },
           address: true,
           items: {
             include: {
