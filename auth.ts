@@ -11,18 +11,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
+        console.log("NextAuth authorize start for:", credentials?.email)
         const email = credentials?.email as string | undefined
         const password = credentials?.password as string | undefined
 
-        if (!email || !password) return null
+        if (!email || !password) {
+          console.log("NextAuth authorize failed: missing email or password")
+          return null
+        }
 
         const user = await prisma.user.findUnique({ where: { email } })
-        if (!user || !user.hashedPassword) return null
-        if (!user.isActive) return null
+        if (!user) {
+          console.log("NextAuth authorize failed: no user found for email:", email)
+          return null
+        }
+        if (!user.hashedPassword) {
+          console.log("NextAuth authorize failed: no hashedPassword for email:", email)
+          return null
+        }
+        if (!user.isActive) {
+          console.log("NextAuth authorize failed: user is inactive:", email)
+          return null
+        }
 
         const isValid = await compare(password, user.hashedPassword)
-        if (!isValid) return null
+        if (!isValid) {
+          console.log("NextAuth authorize failed: password mismatch for email:", email)
+          return null
+        }
 
+        console.log("NextAuth authorize success for user:", user.email, "role:", user.role)
         return {
           id: user.id,
           email: user.email,

@@ -278,7 +278,7 @@ export function ProductsTable() {
               </SheetDescription>
             </SheetHeader>
 
-            <div className="mt-6 grid gap-6">
+            <div className="px-4 pb-4 grid gap-6">
               {formErrors._form && (
                 <p className="text-sm text-destructive">{formErrors._form}</p>
               )}

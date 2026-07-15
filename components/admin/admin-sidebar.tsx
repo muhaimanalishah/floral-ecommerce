@@ -11,6 +11,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import Link from "next/link"
 import { LayoutDashboardIcon, PackageIcon, FolderTreeIcon, ShoppingCartIcon, StarIcon, UsersIcon, LeafIcon } from "lucide-react"
 
 const data = {
@@ -61,7 +62,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
           <SidebarMenuItem>
             <SidebarMenuButton
               className="data-[slot=sidebar-menu-button]:p-1.5!"
-              render={<a href="/admin" />}
+              render={<Link href="/admin" />}
             >
               <LeafIcon className="size-5!" />
               <span className="text-base font-semibold">FloraFetch</span>
